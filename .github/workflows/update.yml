@@ -40,6 +40,10 @@ jobs:
 
       - name: Λήψη δεδομένων και υπολογισμός
         run: python scripts/update.py
+        env:
+          # προαιρετικά: καθημερινή αποστολή στο Telegram (Settings → Secrets and variables → Actions)
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
       - name: Αποθήκευση δεδομένων στο αποθετήριο
         if: env.LIGHT != '1'
