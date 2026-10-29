@@ -360,7 +360,7 @@ SHOT_BETA = 0.0            # βάρος των σουτ στην εκτίμησ�
 HOME_PRIOR = 200.0         # πόσο «τραβιέται» η έδρα κάθε διοργάνωσης προς τη συνολική (σε γκολ)
 
 
-def fit_football(games: list[dict], team_league: dict, weight_fn=None, iters: int = 120, shot_beta=None):
+def fit_football(games: list[dict], team_league: dict, weight_fn=None, iters: int = 120, shot_beta=None, prior=None):
     """Dixon–Coles/Poisson με επίθεση και άμυνα ανά ομάδα, πλεονέκτημα έδρας ανά διοργάνωση και
     αφετηρία ανά πρωτάθλημα. Όλες οι διοργανώσεις λύνονται μαζί.
 
@@ -369,6 +369,7 @@ def fit_football(games: list[dict], team_league: dict, weight_fn=None, iters: in
     λιγότερη τύχη από τα γκολ, οπότε δείχνουν πιο γρήγορα πόσο καλή είναι μια ομάδα."""
     weight_fn = weight_fn or weight
     beta = SHOT_BETA if shot_beta is None else shot_beta
+    P = FB_PRIOR if prior is None else prior
     teams = {g["home"] for g in games} | {g["away"] for g in games}
     lvl = {t: LEAGUE_LEVEL.get(team_league.get(t), DEFAULT_LEVEL) for t in teams}
     prior_a = {t: math.exp(lvl[t] / 2) for t in teams}
@@ -400,8 +401,8 @@ def fit_football(games: list[dict], team_league: dict, weight_fn=None, iters: in
             cg[a] += w * yh; ce[a] += w * eh / dfn[a]
             cg[h] += w * ya; ce[h] += w * ea / dfn[h]
         for t in teams:
-            att[t] = (sg[t] + FB_PRIOR * prior_a[t]) / (se[t] + FB_PRIOR)
-            dfn[t] = (cg[t] + FB_PRIOR * prior_d[t]) / (ce[t] + FB_PRIOR)
+            att[t] = (sg[t] + P * prior_a[t]) / (se[t] + P)
+            dfn[t] = (cg[t] + P * prior_d[t]) / (ce[t] + P)
         nh = defaultdict(float); dh = defaultdict(float)
         for g, w, yh, ya in W:
             if not g["neutral"]:
@@ -559,6 +560,11 @@ def upcoming_of(events):
 
 def played_count(events, teams):
     """Αγώνες ανά ομάδα στη φετινή σεζόν (από το τελευταίο κενό > 35 ημερών, δηλαδή τη θερινή διακοπή)."""
+    c = played_by_team(events)
+    return max((c[t] for t in teams), default=0)
+
+
+def played_by_team(events):
     done = sorted(e["when"] for e in events if e["done"])
     start = done[0] if done else NOW.isoformat()
     for a, b in zip(done, done[1:]):
@@ -568,7 +574,7 @@ def played_count(events, teams):
     for e in events:
         if e["done"] and e["when"] >= start:
             c[e["home"]] += 1; c[e["away"]] += 1
-    return max((c[t] for t in teams), default=0)
+    return c
 
 
 
@@ -691,7 +697,7 @@ def simulate(teams, season_games, lam, n=SIMS):
                     pb=round(bot3[i] / n, 4)) for t, i in ix.items()}, len(rem)
 
 
-def backtest(fb_games, team_league, shown, weeks=10, shot_beta=None):
+def backtest(fb_games, team_league, shown, weeks=10, shot_beta=None, prior=None):
     """Αναδρομικός έλεγχος: για κάθε μία από τις τελευταίες εβδομάδες, το μοντέλο βλέπει μόνο τους
     προηγούμενους αγώνες και προβλέπει τους αγώνες της εβδομάδας."""
     items = []
@@ -703,7 +709,7 @@ def backtest(fb_games, team_league, shown, weeks=10, shot_beta=None):
         if len(train) < 500 or not test:
             continue
         wf = lambda w, ws=ws: 0.5 ** (max((ws - dt.datetime.fromisoformat(w)).total_seconds() / 86400, 0) / HALF_LIFE)
-        model = fit_football(train, team_league, weight_fn=wf, iters=60, shot_beta=shot_beta)
+        model = fit_football(train, team_league, weight_fn=wf, iters=60, shot_beta=shot_beta, prior=prior)
         for g in test:
             lh, la = fb_lambda(model, g["home"], g["away"], g["league"], g["neutral"])
             items.append(dict(kickoff=g["when"], league=league_label(g["league"]), sport="football",
@@ -720,8 +726,10 @@ def logloss(items):
     return s / len(items) if items else None
 
 
-SHOT_CHOICES = (0.0, 0.25, 0.5)
-MODEL_VERSION = 2           # αλλάζει όταν αλλάζει το μοντέλο, ώστε να ξαναγίνει ο αναδρομικός έλεγχος
+# βάρος σουτ → πόσο «τραβιούνται» οι ομάδες προς το επίπεδο του πρωταθλήματος. Τα σουτ έχουν λιγότερο θόρυβο,
+# οπότε θέλουν λιγότερο τράβηγμα (από τον έλεγχο Ιαν.–Οκτ. 2026 με το scripts/evaluate.py).
+SHOT_CHOICES = {0.0: 8.0, 0.35: 4.0, 0.65: 2.5}
+MODEL_VERSION = 3           # αλλάζει όταν αλλάζει το μοντέλο, ώστε να ξαναγίνει ο αναδρομικός έλεγχος
 
 
 def tune_shots(fb_games, team_league, shown, weeks=16):
@@ -732,8 +740,8 @@ def tune_shots(fb_games, team_league, shown, weeks=16):
     out = dict(week=NOW.strftime("%G-W%V"), v=MODEL_VERSION, cover=round(cover, 3), beta=0.0, scores={})
     if cover < 0.6:
         return out
-    for b in SHOT_CHOICES:
-        items = backtest(fb_games, team_league, shown, weeks=weeks, shot_beta=b)
+    for b, pr in SHOT_CHOICES.items():
+        items = backtest(fb_games, team_league, shown, weeks=weeks, shot_beta=b, prior=pr)
         out["scores"][str(b)] = round(logloss(items), 4) if items else None
     ok = {float(b): v for b, v in out["scores"].items() if v is not None}
     if ok and 0.0 in ok:
@@ -744,7 +752,7 @@ def tune_shots(fb_games, team_league, shown, weeks=16):
 
 
 def main() -> int:
-    global SHOT_BETA
+    global SHOT_BETA, FB_PRIOR
     SITE.mkdir(exist_ok=True); DATA.mkdir(exist_ok=True)
     cache_p, data_p, hist_p = DATA / "cache.json", SITE / "data.json", SITE / "history.json"
     tables_p = SITE / "tables.json"
@@ -752,6 +760,21 @@ def main() -> int:
     old = json.loads(data_p.read_text()) if data_p.exists() else {}
     history = json.loads(hist_p.read_text()) if hist_p.exists() else {"events": {}}
     hist = history.setdefault("events", {})
+    # Αντίγραφο ασφαλείας του ιστορικού μέσα στο cache.json (και, αν υπάρχει, το data/history_restore.json):
+    # αν κάποιο ανέβασμα αντικαταστήσει το site/history.json με παλιό αρχείο, οι προβλέψεις δεν χάνονται.
+    restore_p = DATA / "history_restore.json"
+    backups = [cache.get("hist") or {}]
+    if restore_p.exists():
+        try:
+            backups.append(json.loads(restore_p.read_text()).get("events") or {})
+        except ValueError:
+            pass
+    for b in backups:
+        for k, v in b.items():
+            if k not in hist:
+                hist[k] = v
+            elif "result" in v and "result" not in hist[k]:
+                hist[k]["result"] = v["result"]
     problems = []
 
     # 1. λήψη (SKIP_FETCH=1: μόνο υπολογισμός με ό,τι υπάρχει ήδη, για δοκιμές)
@@ -809,6 +832,7 @@ def main() -> int:
             tune = history["tune"] = tune_shots(fb_games, team_league, shown_slugs)
             print(f"  κάλυψη {tune['cover']:.0%}, log-loss {tune['scores']} → β={tune['beta']}")
         SHOT_BETA = float(tune.get("beta", 0.0))
+        FB_PRIOR = SHOT_CHOICES.get(SHOT_BETA, FB_PRIOR)
         model = fit_football(fb_games, team_league)
         print(f"• ποδόσφαιρο: {len(fb_games)} αγώνες στο μοντέλο, μ={model['mu']:.2f}, έδρα×{model['home']['_all']:.2f}")
         lam = lambda h, a, slug, neutral=False: fb_lambda(model, h, a, slug, neutral)
@@ -856,6 +880,7 @@ def main() -> int:
             ups = upcoming_of(events)
             if not ups:
                 continue
+            pc = played_by_team(events) if not lg.get("cup") else None
             for e in ups:
                 lh, la = (round(x, 3) for x in lam(e["home"], e["away"], lg["slug"], e["neutral"]))
                 m = dict(id=e["id"], sport="football", league=lg["name"], country=lg["cc"], kickoff=e["when"],
@@ -866,6 +891,8 @@ def main() -> int:
                                    pos=[pos.get(e["home"]), pos.get(e["away"])],
                                    lvl=[[league_label(team_league[x]), LEAGUE_LEVEL.get(team_league[x])] if x in team_league else None
                                         for x in (e["home"], e["away"])]))
+                if pc is not None:                    # αριθμός αγωνιστικής (για τις σελίδες «Προγνωστικά αγωνιστικής»)
+                    m["rn"] = 1 + round((pc[e["home"]] + pc[e["away"]]) / 2)
                 matches.append(m)
                 if dt.datetime.fromisoformat(e["when"]) > NOW:
                     hist[e["id"]] = dict(sport="football", league=lg["name"], kickoff=e["when"], home=m["home"],
@@ -943,6 +970,17 @@ def main() -> int:
     except Exception as e:
         import traceback; traceback.print_exc()
         print(f"  ! στατικές σελίδες: {e}")
+    if not LIGHT:                          # Telegram: μία φορά τη μέρα, αν έχουν οριστεί τα μυστικά στο GitHub
+        try:
+            import static_pages, telegram
+            before = history.get("tg")
+            telegram.send_daily(matches, history, NOW, static_pages.base_url(SITE))
+            if history.get("tg") != before:
+                hist_p.write_text(json.dumps(history, ensure_ascii=False, separators=(",", ":")))
+        except Exception as e:
+            print(f"  ! Telegram: {e}")
+    cache["hist"] = history["events"]
+    cache_p.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")))
     done = sum("result" in v for v in history["events"].values())
     print(f"✓ {len(matches)} αγώνες σε {len(meta)} διοργανώσεις · ιστορικό {len(history['events'])} ({done} με αποτέλεσμα)")
     return 0

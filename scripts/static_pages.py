@@ -3,7 +3,7 @@
 
 Κάθε εκτέλεση γράφει (μέσα στο site/, χωρίς να μπαίνουν στο αποθετήριο):
   agones/<ομάδα>-<ομάδα>-<ημερομηνία>.html   μία σελίδα ανά αγώνα (επερχόμενοι και όσοι παίχτηκαν τις τελευταίες 14 μέρες)
-  protathlimata/<πρωτάθλημα>.html            «Προγνωστικά <πρωτάθλημα>» με αγώνες και βαθμολογία
+  protathlimata/<πρωτάθλημα>.html            «Προγνωστικά <πρωτάθλημα>: Νη αγωνιστική», κείμενο ανά αγώνα, η προηγούμενη αγωνιστική και βαθμολογία
   protathlimata/index.html                   λίστα πρωταθλημάτων
   og/<αγώνας>.png, og.png                    εικόνες προεπισκόπησης 1200×630 (αν υπάρχει το Pillow)
   sitemap.xml, robots.txt, static.css
@@ -220,6 +220,10 @@ td small{display:block;color:var(--muted);font-size:12px}
 .wide{overflow-x:auto}
 footer{border-top:1px solid var(--line);padding-block:20px 34px;color:var(--muted);font-size:13px}footer a{color:var(--ink)}
 footer p{margin:0 0 6px;max-width:80ch}.links{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0}
+.lead{margin:0;font-size:16.5px;line-height:1.6}
+.mt h2 a{color:var(--ink);text-decoration:none}.mt h2 a:hover{color:var(--amber-ink)}
+.mw{margin:-6px 0 0;color:var(--muted);font:600 14px/1.2 var(--display)}
+.ml{margin:0;font-size:15px}.ml b{font:700 17px/1 var(--display)}.ml span{color:var(--muted);font-size:13px}
 @media (max-width:680px){.grid{grid-template-columns:minmax(0,1fr)}.hero{padding:18px 16px}}
 """
 
@@ -366,6 +370,153 @@ def site_og(path):
     img.convert("P", palette=Image.ADAPTIVE, colors=96).save(path, "PNG", optimize=True)
 
 
+# ------------------------------------------------------------------ σελίδα πρωταθλήματος / αγωνιστικής
+NEUTER = {"Champions League", "Europa League", "Conference League", "NBA"}
+
+
+def next_round(ms):
+    """Οι αγώνες της επόμενης αγωνιστικής: από τον πρώτο, ώσπου κάποια ομάδα να ξαναπαίζει."""
+    seen, out = set(), []
+    for m in sorted(ms, key=lambda x: x["kickoff"]):
+        if m["home"] in seen or m["away"] in seen:
+            break
+        out.append(m); seen |= {m["home"], m["away"]}
+    return out
+
+
+def last_round(events, name, now):
+    """Η προηγούμενη αγωνιστική από το ιστορικό (με αποτελέσματα), προς τα πίσω ώσπου να ξαναπαίζει ομάδα."""
+    lo = (now - dt.timedelta(days=12)).isoformat()
+    past = sorted((e for e in events.values() if e.get("league") == name and e.get("result") and lo <= e["kickoff"] < now.isoformat()),
+                  key=lambda e: e["kickoff"], reverse=True)
+    seen, out = set(), []
+    for e in past:
+        if e["home"] in seen or e["away"] in seen:
+            break
+        out.append(e); seen |= {e["home"], e["away"]}
+    return sorted(out, key=lambda e: e["kickoff"])
+
+
+def date_range(ms):
+    a, b = local(ms[0]["kickoff"]), local(ms[-1]["kickoff"])
+    if a.date() == b.date():
+        return f"{a.day} {MONTHS[a.month - 1]}"
+    if a.month == b.month:
+        return f"{a.day}–{b.day} {MONTHS[a.month - 1]}"
+    return f"{a.day} {MONTHS[a.month - 1]} – {b.day} {MONTHS[b.month - 1]}"
+
+
+def league_page(name, ms, T, history, now):
+    fb = ms[0]["sport"] == "football"
+    rnd_ms = next_round(ms)
+    rns = [m.get("rn") for m in rnd_ms if m.get("rn")]
+    rn = max(set(rns), key=rns.count) if rns else None
+    dr = date_range(rnd_ms)
+    label = f"{rn}η αγωνιστική" if rn else f"αγώνες {dr}"
+    title = f"Προγνωστικά {name}: {label}" + (f" ({dr})" if rn else "")
+    h1 = f"Προγνωστικά {name}: {label}"
+
+    scored = [(m, probs_of(m)) for m in rnd_ms]
+    picks = [(m, p, *best(m, p)) for m, p in scored]
+    fav = max(picks, key=lambda x: x[3])
+    opn = min(picks, key=lambda x: x[3])
+    first = local(rnd_ms[0]["kickoff"]); lastd = local(rnd_ms[-1]["kickoff"])
+    art = lambda d: ("το " if d.weekday() == 5 else "την ") + f"{DAYS[d.weekday()]} {d.day} {MONTHS[d.month - 1]}"
+    span = art(first) if first.date() == lastd.date() else f"από {art(first)} ως {art(lastd)}"
+    of = "του" if name in NEUTER else "της"
+    intro = [f"{'Η ' + label if rn else 'Το επόμενο πρόγραμμα'} {of} {name} έχει {len(rnd_ms)} "
+             f"{'αγώνα' if len(rnd_ms) == 1 else 'αγώνες'}, {span}."]
+    if len(picks) > 1:
+        fv = ("η ισοπαλία στο " + fav[0]["home"] + " – " + fav[0]["away"]) if fav[2] == "Χ" else \
+             f"{fav[4]} στο {fav[0]['home']} – {fav[0]['away']}"
+        intro.append(f"Πιο πιθανό σημείο: {fv} ({pct(fav[3])}). Το πιο ανοιχτό παιχνίδι είναι το {opn[0]['home']} – {opn[0]['away']}, "
+                     f"όπου κανένα σημείο δεν ξεπερνά το {pct(opn[3])}.")
+    if fb:
+        hi = max(scored, key=lambda x: x[1]["O25"])
+        intro.append(f"Τα περισσότερα γκολ αναμένονται στο {hi[0]['home']} – {hi[0]['away']} (Over 2,5: {pct(hi[1]['O25'])}).")
+
+    # ανά αγώνα
+    secs = []
+    for m, p, k, pr, team in picks:
+        lines, verdict = why(m, p)
+        if fb:
+            t = p["top"]
+            line = (f"1 <b>{pct(p['H'])}</b> · Χ <b>{pct(p['D'])}</b> · 2 <b>{pct(p['A'])}</b> "
+                    f"<span>(δίκαιες αποδόσεις {fair(p['H'])} / {fair(p['D'])} / {fair(p['A'])})</span><br>"
+                    f"Πιθανότερο σκορ <b>{t[0]}-{t[1]}</b> · Over 2,5 <b>{pct(p['O25'])}</b> · Γκολ-Γκολ <b>{pct(p['BT'])}</b>")
+        else:
+            line = (f"1 <b>{pct(p['H'])}</b> · 2 <b>{pct(p['A'])}</b> <span>(δίκαιες αποδόσεις {fair(p['H'])} / {fair(p['A'])})</span><br>"
+                    f"Αναμενόμενο σκορ <b>{round(m['expHome'])}-{round(m['expAway'])}</b> · Σύνολο <b>{dec(p['total'])}</b>")
+        secs.append(f"""<section class="card mt">
+<h2><a href="../{m.get('page')}">{E(m['home'])} – {E(m['away'])}</a></h2>
+<p class="mw">{E(when_text(m['kickoff']))}</p>
+{pbar_html(p)}
+<p class="ml">{line}</p>
+<ul>{''.join(f'<li>{E(x)}</li>' for x in lines)}</ul>
+<p class="verdict">{E(verdict)}</p>
+</section>""")
+
+    # συνοπτικός πίνακας όλων των επόμενων
+    rows = []
+    for m in sorted(ms, key=lambda x: x["kickoff"]):
+        p = probs_of(m)
+        cells = (f'<td class="n">{pct(p["H"])}<small>{fair(p["H"])}</small></td>' +
+                 (f'<td class="n">{pct(p["D"])}<small>{fair(p["D"])}</small></td>' if fb else "") +
+                 f'<td class="n">{pct(p["A"])}<small>{fair(p["A"])}</small></td>')
+        rows.append(f'<tr><td>{when_text(m["kickoff"])}</td><td><a href="../{m.get("page")}">{E(m["home"])} – {E(m["away"])}</a></td>{cells}</tr>')
+    head = "<th style='text-align:right'>1</th>" + ("<th style='text-align:right'>Χ</th>" if fb else "") + "<th style='text-align:right'>2</th>"
+
+    # η προηγούμενη αγωνιστική με αποτελέσματα
+    prev_html = ""
+    prev = last_round(history.get("events") or {}, name, now)
+    if prev:
+        hits, tr = 0, []
+        for e in prev:
+            P, r = e["p"], e["result"]
+            real = "1" if r["home"] > r["away"] else "Χ" if r["home"] == r["away"] else "2"
+            items = [("1", P["H"]), ("Χ", P.get("D", 0.0)), ("2", P["A"])]
+            k, v = max(items, key=lambda x: x[1])
+            ok = k == real; hits += ok
+            tr.append(f'<tr><td>{E(e["home"])} – {E(e["away"])}</td><td class="n">{r["home"]}-{r["away"]}</td>'
+                      f'<td class="n">{k} <small>{pct(v)}</small></td><td class="n"><span class="pill {"W" if ok else "L"}">{"✓" if ok else "✗"}</span></td></tr>')
+        prev_html = (f'<section class="card"><h2>Η προηγούμενη αγωνιστική: {hits} στα {len(prev)}</h2>'
+                     f'<p style="margin:0;color:var(--muted)">Οι προβλέψεις όπως δημοσιεύτηκαν πριν από τους αγώνες, και τι βγήκε.</p>'
+                     f'<div class="wide"><table><thead><tr><th>Αγώνας</th><th style="text-align:right">Σκορ</th>'
+                     f'<th style="text-align:right">Πρόβλεψη</th><th></th></tr></thead><tbody>{"".join(tr)}</tbody></table></div></section>')
+
+    table_html = ""
+    if T:
+        sim = T.get("sim")
+        th = "<tr><th>#</th><th>Ομάδα</th><th style='text-align:right'>Αγ</th><th style='text-align:right'>Β</th>" + \
+             ("<th style='text-align:right'>Αναμ. βαθμοί</th><th style='text-align:right'>1η</th><th style='text-align:right'>Top 4</th>"
+              "<th style='text-align:right'>Τελευταίοι 3</th>" if sim else "") + "</tr>"
+        tr = "".join(f'<tr><td>{i}</td><td>{E(r["t"])}</td><td class="n">{r["p"]}</td><td class="n">{r["pts"]}</td>' +
+                     (f'<td class="n">{round(r["xp"])}</td><td class="n">{pz(r["p1"])}</td><td class="n">{pz(r["p4"])}</td>'
+                      f'<td class="n">{pz(r["pb"])}</td>' if sim else "") + "</tr>" for i, r in enumerate(T["rows"], 1))
+        table_html = (f'<section class="card"><h2>Βαθμολογία{" και πρόβλεψη τελικής κατάταξης" if sim else ""}</h2>'
+                      f'<div class="wide"><table><thead>{th}</thead><tbody>{tr}</tbody></table></div>'
+                      f'<p style="margin:0;color:var(--muted);font-size:13px">{E(T.get("note", ""))}</p></section>')
+
+    desc = (f"{title}: πιθανότητες {'1Χ2, πιθανότερο σκορ και Over/Under' if fb else 'νίκης'} για κάθε αγώνα από στατιστικό μοντέλο. "
+            f"Φαβορί: {fav[4] if fav[2] != 'Χ' else 'ισοπαλία ' + fav[0]['home'] + ' – ' + fav[0]['away']} ({pct(fav[3])}).")
+    body = f"""<nav class="crumbs"><a href="../">Αρχική</a> › <a href="./">Πρωταθλήματα</a> › {E(name)}</nav>
+<h1 style="color:var(--ink)">{E(h1)}</h1>
+<p class="lead">{E(' '.join(intro))}</p>
+<p style="margin:0;color:var(--muted);font-size:13px">Ενημέρωση {when_text(now.isoformat())}. Οι πιθανότητες αλλάζουν όσο έρχονται νέα αποτελέσματα.</p>
+{''.join(secs)}
+{prev_html}
+<section class="card"><h2>Όλοι οι επόμενοι αγώνες</h2><div class="wide"><table><thead><tr><th>Ημέρα</th><th>Αγώνας</th>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>
+{table_html}
+<a class="cta" href="../">Όλοι οι αγώνες, το δελτίο και η διαδραστική ανάλυση</a>"""
+    jsonld = {"@context": "https://schema.org", "@type": "ItemList", "name": title,
+              "itemListElement": [{"@type": "ListItem", "position": i, "item": {
+                  "@type": "SportsEvent", "name": f"{m['home']} – {m['away']}", "startDate": m["kickoff"],
+                  "sport": "Soccer" if fb else "Basketball", "eventStatus": "https://schema.org/EventScheduled",
+                  "homeTeam": {"@type": "SportsTeam", "name": m["home"]}, "awayTeam": {"@type": "SportsTeam", "name": m["away"]}}}
+                  for i, m in enumerate(rnd_ms, 1)]}
+    return title, h1, desc, body, jsonld
+
+
 # ------------------------------------------------------------------ κατασκευή
 def build(site: pathlib.Path, matches: list, history: dict, tables: list, now: dt.datetime):
     base = base_url(site)
@@ -488,44 +639,14 @@ def build(site: pathlib.Path, matches: list, history: dict, tables: list, now: d
                                    base + s if base else "", body, "../", "", None, lg_links.replace("{root}", "../")))
         urls.append((base + s, "weekly"))
 
-    # --- σελίδες πρωταθλημάτων
+    # --- σελίδες πρωταθλημάτων: «Προγνωστικά <πρωτάθλημα>: Νη αγωνιστική»
     tmap = {t["name"]: t for t in tables or []}
     for name, ms in leagues.items():
         ls = league_slug(name)
-        rows = []
-        for m in sorted(ms, key=lambda x: x["kickoff"]):
-            p = probs_of(m)
-            cells = (f'<td class="n">{pct(p["H"])}<small>{fair(p["H"])}</small></td>' +
-                     (f'<td class="n">{pct(p["D"])}<small>{fair(p["D"])}</small></td>' if m["sport"] == "football" else "") +
-                     f'<td class="n">{pct(p["A"])}<small>{fair(p["A"])}</small></td>')
-            rows.append(f'<tr><td>{when_text(m["kickoff"])}</td><td><a href="../{m.get("page")}">{E(m["home"])} – {E(m["away"])}</a></td>{cells}</tr>')
-        fb = ms[0]["sport"] == "football"
-        head = "<th style='text-align:right'>1</th>" + ("<th style='text-align:right'>Χ</th>" if fb else "") + "<th style='text-align:right'>2</th>"
-        table_html = ""
-        T = tmap.get(name)
-        if T:
-            sim = T.get("sim")
-            th = "<tr><th>#</th><th>Ομάδα</th><th style='text-align:right'>Αγ</th><th style='text-align:right'>Β</th>" + \
-                 ("<th style='text-align:right'>Αναμ. βαθμοί</th><th style='text-align:right'>1η</th><th style='text-align:right'>Top 4</th>"
-                  "<th style='text-align:right'>Τελευταίοι 3</th>" if sim else "") + "</tr>"
-            tr = "".join(f'<tr><td>{i}</td><td>{E(r["t"])}</td><td class="n">{r["p"]}</td><td class="n">{r["pts"]}</td>' +
-                         (f'<td class="n">{round(r["xp"])}</td><td class="n">{pz(r["p1"])}</td><td class="n">{pz(r["p4"])}</td>'
-                          f'<td class="n">{pz(r["pb"])}</td>' if sim else "") + "</tr>" for i, r in enumerate(T["rows"], 1))
-            table_html = (f'<section class="card"><h2>Βαθμολογία{" και πρόβλεψη τελικής κατάταξης" if sim else ""}</h2>'
-                          f'<div class="wide"><table><thead>{th}</thead><tbody>{tr}</tbody></table></div>'
-                          f'<p style="margin:0;color:var(--muted);font-size:13px">{E(T.get("note", ""))}</p></section>')
-        desc = (f"Προγνωστικά {name} από στατιστικό μοντέλο: πιθανότητες {'1Χ2' if fb else 'νίκης'} και δίκαιες αποδόσεις για "
-                f"{len(ms)} αγώνες των επόμενων ημερών" + (", και πρόβλεψη τελικής βαθμολογίας." if T and T.get("sim") else "."))
-        body = f"""<nav class="crumbs"><a href="../">Αρχική</a> › <a href="./">Πρωταθλήματα</a> › {E(name)}</nav>
-<h1 style="color:var(--ink)">Προγνωστικά {E(name)}</h1>
-<p style="margin:0;color:var(--muted)">Πιθανότητες για κάθε αγώνα από στατιστικό μοντέλο, με τις δίκαιες αποδόσεις που τους αντιστοιχούν. Ενημέρωση {when_text(now.isoformat())}.</p>
-<section class="card"><h2>Επόμενοι αγώνες</h2><div class="wide"><table><thead><tr><th>Ημέρα</th><th>Αγώνας</th>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>
-{table_html}
-<a class="cta" href="../">Όλοι οι αγώνες και η διαδραστική ανάλυση</a>"""
+        title, h1, desc, body, jsonld = league_page(name, ms, tmap.get(name), history, now)
         (site / "protathlimata" / f"{ls}.html").write_text(
-            page(f"Προγνωστικά {name}: πιθανότητες για κάθε αγώνα | SamurAI bet", desc,
-                 f"{base}protathlimata/{ls}.html" if base else "", body, "../", f"{base}og.png" if base and has_pil else "",
-                 None, lg_links.replace("{root}", "../")))
+            page(f"{title} | SamurAI bet", desc, f"{base}protathlimata/{ls}.html" if base else "", body, "../",
+                 f"{base}og.png" if base and has_pil else "", jsonld, lg_links.replace("{root}", "../")))
         urls.append((f"{base}protathlimata/{ls}.html", "daily"))
 
     idx = "".join(f'<li><a href="{league_slug(n)}.html">Προγνωστικά {E(n)}</a> <small>({len(ms)} αγώνες)</small></li>' for n, ms in leagues.items())
