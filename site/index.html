@@ -481,6 +481,40 @@ body.has-slip footer { padding-bottom: 90px; }
     padding-bottom: env(safe-area-inset-bottom, 0px); }
   .slip-body { max-height: 62vh; }
 }
+/* ---------- My teams ---------- */
+.match-open .myteams { display: none; }
+.myteams { margin-bottom: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 12px; }
+.myteams.slim { grid-template-columns: auto minmax(0, 1fr) minmax(160px, 260px) auto; align-items: center; padding: 10px 10px 10px 14px; border-radius: 12px; }
+.myteams .st { width: 22px; height: 22px; color: var(--amber); }
+.myteams.slim p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.35; }
+.myteams.slim p b { display: block; color: var(--ink); font: 700 16px/1.2 var(--display); }
+.mt-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mt-head h2 { margin: 0; font: italic 800 22px/1.1 var(--display); display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.mt-add { border: 1px solid var(--line); background: var(--bg); border-radius: 9px; padding: 8px 10px; width: 100%; font-size: 14px; }
+.mt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 4px 4px 4px 10px; font: 600 14px/1 var(--display); }
+.mt-chip button { border: 0; background: none; cursor: pointer; color: var(--muted); width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; }
+.mt-chip button:hover { color: var(--neg); background: var(--surface); }
+.mt-chip svg { width: 12px; height: 12px; }
+.mt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.mt-m { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; text-decoration: none; color: inherit;
+  border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 9px 12px; }
+.mt-m:hover { border-color: var(--amber); }
+.mt-m .w { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-m .w .ic { width: 16px; height: 11px; flex: none; }
+.mt-m .w .ic.round { width: 13px; height: 13px; }
+.mt-m b { font: 700 16px/1.2 var(--display); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-m .bp { grid-row: 1 / 3; grid-column: 2; text-align: right; font: 800 italic 19px/1 var(--display); color: var(--amber-ink); }
+.mt-m .bp small { display: block; font: 500 11px/1.25 var(--body); font-style: normal; color: var(--muted); max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.tm .fv { color: var(--amber); font-size: 13px; margin-left: 2px; }
+.follow { display: flex; flex-wrap: wrap; gap: 8px; }
+.follow button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; cursor: pointer; font: 600 15px/1 var(--display); }
+.follow button:hover { border-color: var(--amber); }
+.follow button[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: var(--on-amber); }
+.follow svg { width: 16px; height: 16px; }
+@media (max-width: 680px) { .myteams.slim { grid-template-columns: auto minmax(0, 1fr) auto; } .myteams.slim .mt-add { grid-column: 1 / -1; grid-row: 2; } }
+
 /* ---------- Install as app ---------- */
 .appbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; margin-bottom: 16px;
   background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 12px; padding: 10px 10px 10px 12px; }
@@ -532,6 +566,9 @@ body.has-slip footer { padding-bottom: 90px; }
       <button type="button" class="appbar-go" id="appbar-go" hidden>Εγκατάσταση</button>
       <button type="button" class="appbar-x" id="appbar-x" aria-label="Κλείσιμο"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
+
+    <section class="myteams" id="myteams" hidden aria-label="Οι ομάδες μου"></section>
+    <datalist id="team-list"></datalist>
 
     <section class="mview" id="match-view" hidden aria-live="polite"></section>
 
@@ -588,7 +625,7 @@ body.has-slip footer { padding-bottom: 90px; }
       <p>Οι δείκτες υπολογίζονται μαζί για 30 περίπου πρωταθλήματα, τα τρία ευρωπαϊκά κύπελλα και τους προκριματικούς τους. Το δύσκολο είναι η σύγκριση ανάμεσα σε πρωταθλήματα: η ΑΕΚ κερδίζει άνετα στην Ελλάδα και η Man City στην Αγγλία, αλλά αυτό δεν τις κάνει ισάξιες. Γι' αυτό κάθε πρωτάθλημα ξεκινά από ένα επίπεδο που βγαίνει από τη μέση βαθμολογία Elo των ομάδων του, όπως κάνουν και οι γνωστές κατατάξεις συλλόγων. Οι ευρωπαϊκοί αγώνες και οι ομάδες που ανεβοκατεβαίνουν κατηγορία διορθώνουν μετά αυτό το επίπεδο με πραγματικά αποτελέσματα.</p>
       <div class="formula">λ = Μ.Ο. × Έδρα × Επίθεση<sub>γηπ.</sub> × Άμυνα<sub>φιλ.</sub> &nbsp;&nbsp; μ = Μ.Ο. × Επίθεση<sub>φιλ.</sub> × Άμυνα<sub>γηπ.</sub></div>
       <p>Χρησιμοποιούνται οι αγώνες των τελευταίων 11 μηνών (15 για τα ευρωπαϊκά), και οι πρόσφατοι μετράνε περισσότερο: ένας αγώνας πριν από ένα χρόνο έχει περίπου το μισό βάρος από έναν χθεσινό. Έτσι νωρίς στη σεζόν η περσινή χρονιά δίνει την αφετηρία, και με τον καιρό βαραίνουν τα φετινά. Μια ομάδα με λίγους αγώνες «τραβιέται» προς το επίπεδο του πρωταθλήματός της. Το πόσα γκολ βγαίνουν στα ματς μιας ομάδας τραβιέται ακόμα πιο έντονα προς τον μέσο όρο, γιατί έχει πολύ περισσότερη τύχη από το ποια ομάδα είναι καλύτερη. Ο γενικός μέσος όρος γκολ μετριέται από τον τελευταίο περίπου μήνα, γιατί αλλάζει μέσα στη σεζόν. Το πλεονέκτημα έδρας υπολογίζεται χωριστά για κάθε διοργάνωση (στην Ελλάδα και στη Γερμανία είναι μεγαλύτερο απ' ό,τι στην Ιταλία), και σε ουδέτερο γήπεδο δεν μετράει.</p>
-      <p>Κάθε αλλαγή στο μοντέλο ελέγχεται σε αγώνες που έχουν ήδη παιχτεί: το μοντέλο «βλέπει» μόνο τα δεδομένα πριν από κάθε εβδομάδα και προβλέπει τους αγώνες της. Οι ρυθμίσεις του (πόσο γρήγορα ξεχνά, πόσο τραβιούνται οι ομάδες προς τον μέσο όρο, πόσο μετράει η έδρα) διαλέχτηκαν έτσι, σε 2.504 αγώνες από τον Ιανουάριο ως τον Οκτώβριο του 2026. Εκεί βρήκε το πιο πιθανό σημείο στο 51% των περιπτώσεων, ενώ η πρόβλεψη «πάντα άσος» έπιανε το 44%. Πιο σημαντικό από το ποσοστό είναι ότι οι πιθανότητες είναι ρεαλιστικές: όταν δίνει 65%, το σημείο βγαίνει περίπου 65% των φορών. Κανένα μοντέλο δεν πιάνει πολύ πάνω από 55% στο 1Χ2: το ποδόσφαιρο έχει πολλή τύχη.</p>
+      <p>Κάθε αλλαγή στο μοντέλο ελέγχεται σε αγώνες που έχουν ήδη παιχτεί: το μοντέλο «βλέπει» μόνο τα δεδομένα πριν από κάθε εβδομάδα και προβλέπει τους αγώνες της. Οι ρυθμίσεις του (πόσο γρήγορα ξεχνά, πόσο τραβιούνται οι ομάδες προς τον μέσο όρο, πόσο μετράει η έδρα) διαλέχτηκαν έτσι, σε 2.513 αγώνες από τον Ιανουάριο ως τον Οκτώβριο του 2026. Εκεί, μετρώντας και τα σουτ, βρήκε το πιο πιθανό σημείο στο 52% των περιπτώσεων, ενώ η πρόβλεψη «πάντα άσος» έπιανε το 44%. Πιο σημαντικό από το ποσοστό είναι ότι οι πιθανότητες είναι ρεαλιστικές: όταν δίνει 65%, το σημείο βγαίνει περίπου 65% των φορών. Κανένα μοντέλο δεν πιάνει πολύ πάνω από 55% στο 1Χ2: το ποδόσφαιρο έχει πολλή τύχη.</p>
       <p>Σουτ: τα γκολ έχουν πολλή τύχη, ενώ τα σουτ στην εστία δείχνουν πιο σταθερά ποια ομάδα δημιουργεί και ποια επιτρέπει φάσεις. Κάθε εβδομάδα το μοντέλο δοκιμάζει στις τελευταίες 16 εβδομάδες αν προβλέπει καλύτερα όταν μετρά και τα σουτ, και τα χρησιμοποιεί μόνο αν η βελτίωση είναι πραγματική. <span id="shot-note"></span></p>
       <p>Τα γκολ κάθε ομάδας ακολουθούν κατανομή Poisson. Συνδυάζοντάς τες παίρνουμε την πιθανότητα για κάθε σκορ από 0-0 έως 10-10, με τη διόρθωση Dixon–Coles (ρ = −0,05) που ανεβάζει ελαφρά τα 0-0 και 1-1. Από τον πίνακα σκορ αθροίζονται όλες οι αγορές: 1Χ2, Over/Under, Γκολ-Γκολ, διπλή ευκαιρία.</p>
       <h3>Βαθμολογίες και τελική κατάταξη</h3>
@@ -808,14 +845,92 @@ body.has-slip footer { padding-bottom: 90px; }
   }
 
 
+
+  /* ---------- οι ομάδες μου ---------- */
+  const STAR = on => `<svg class="st" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  const fav = {
+    set: new Set(),
+    load() { try { const a = JSON.parse(store.get("pp-fav") || "[]"); if (Array.isArray(a)) this.set = new Set(a.filter(x => typeof x === "string")); } catch (e) {} },
+    save() { store.set("pp-fav", JSON.stringify([...this.set])); },
+    has(n) { return this.set.has(n); },
+    toggle(n) { this.set.has(n) ? this.set.delete(n) : this.set.add(n); this.save(); this.refresh(); },
+    refresh() {
+      document.querySelectorAll("[data-team]").forEach(x => { x.hidden = !this.has(x.dataset.team); });
+      document.querySelectorAll("[data-follow]").forEach(b => {
+        const on = this.has(b.dataset.follow); b.setAttribute("aria-pressed", String(on));
+        b.innerHTML = STAR(on); b.append(document.createTextNode((on ? "Ακολουθείς: " : "Ακολούθησε: ") + b.dataset.follow));
+      });
+      renderMyTeams();
+    }
+  };
+  fav.load();
+  const ALL_TEAMS = (() => {
+    const s = new Set();
+    matches.forEach(m => { s.add(m.home); s.add(m.away); });
+    ((TABLES || {}).leagues || []).forEach(t => (t.rows || []).forEach(r => s.add(r.t)));
+    return [...s].sort((a, b) => a.localeCompare(b, "el"));
+  })();
+  function teamInput() {
+    const inp = el("input", "mt-add"); inp.type = "search"; inp.setAttribute("list", "team-list"); inp.autocomplete = "off";
+    inp.placeholder = "Γράψε μια ομάδα…"; inp.setAttribute("aria-label", "Πρόσθεσε ομάδα");
+    const tryAdd = () => {
+      const q = fold(inp.value.trim()); if (!q) return;
+      const hit = ALL_TEAMS.find(t => fold(t) === q) || (ALL_TEAMS.filter(t => fold(t).includes(q)).length === 1 ? ALL_TEAMS.find(t => fold(t).includes(q)) : null);
+      if (hit) { inp.value = ""; if (!fav.has(hit)) fav.toggle(hit); }
+    };
+    inp.addEventListener("change", tryAdd);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); tryAdd(); } });
+    return inp;
+  }
+  function renderMyTeams() {
+    const box = $("#myteams"); if (!box) return;
+    const dl = $("#team-list"); if (dl && !dl.childElementCount) ALL_TEAMS.forEach(t => { const o = el("option"); o.value = t; dl.append(o); });
+    box.textContent = ""; box.className = "myteams";
+    if (!fav.set.size) {
+      if (store.get("pp-fav-hide")) { box.hidden = true; return; }
+      box.classList.add("slim");
+      const ic = el("span"); ic.innerHTML = STAR(false);
+      const p = el("p"); p.append(el("b", null, "Ακολούθησε τις ομάδες σου"), document.createTextNode("και βλέπεις εδώ πρώτα τους αγώνες τους."));
+      const x = el("button", "appbar-x"); x.type = "button"; x.setAttribute("aria-label", "Κλείσιμο");
+      x.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+      x.addEventListener("click", () => { store.set("pp-fav-hide", "1"); box.hidden = true; });
+      box.append(ic.firstChild, p, teamInput(), x); box.hidden = false; return;
+    }
+    const head = el("div", "mt-head"), h = el("h2"); h.innerHTML = STAR(true); h.append(document.createTextNode("Οι ομάδες μου"));
+    const inp = teamInput(); inp.style.width = "220px"; inp.style.maxWidth = "100%";
+    head.append(h, inp);
+    const chips = el("div", "mt-chips");
+    [...fav.set].forEach(n => {
+      const c = el("span", "mt-chip", n), b = el("button"); b.type = "button"; b.setAttribute("aria-label", `Αφαίρεση ${n}`);
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+      b.addEventListener("click", () => fav.toggle(n)); c.append(b); chips.append(c);
+    });
+    const mine = matches.filter(m => m.kt.getTime() > NOW - 2 * 36e5 && (fav.has(m.home) || fav.has(m.away))).slice(0, 8);
+    box.append(head, chips);
+    if (!mine.length) box.append(el("p", "mt-empty", "Δεν υπάρχουν αγώνες των ομάδων σου τις επόμενες μέρες."));
+    else {
+      const list = el("div", "mt-list");
+      mine.forEach(m => {
+        const a = el("a", "mt-m"); a.href = "#m/" + encodeURIComponent(m.id);
+        const w = el("span", "w"); w.append(iconEl(m.cc), document.createTextNode(`${whenShort(m.kt)} · ${m.league}`));
+        const [k, p, lab] = best(m);
+        const bp = el("span", "bp", pct(p)); bp.append(el("small", null, k === "Χ" ? "ισοπαλία" : lab.replace(" νίκη", "")));
+        a.append(w, el("b", null, `${m.home} – ${m.away}`), bp); list.append(a);
+      });
+      box.append(list);
+    }
+    box.hidden = false;
+  }
+
   /* ---------- εγκατάσταση σαν εφαρμογή ---------- */
   let installEvt = window.__bip;
   window.addEventListener("bip", () => { installEvt = window.__bip; showAppbar(); });
   window.addEventListener("appinstalled", () => { installEvt = null; $("#appbar").hidden = true; store.set("pp-app", "done"); });
   const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const visits = (() => { const n = (parseInt(store.get("pp-visits") || "0", 10) || 0) + 1; store.set("pp-visits", String(n)); return n; })();
   function showAppbar() {
-    if (standalone() || store.get("pp-app")) return;
+    if (standalone() || store.get("pp-app") || visits < 2) return;    // από τη δεύτερη επίσκεψη, για να μη φορτώνεται η πρώτη εικόνα
     const bar = $("#appbar"); if (!bar) return;
     if (installEvt) { $("#appbar-go").hidden = false; $("#appbar-txt").textContent = "Ανοίγει σαν εφαρμογή, με ένα πάτημα."; }
     else if (isIOS) { $("#appbar-go").hidden = true; $("#appbar-txt").textContent = "Στο Safari πάτα Κοινοποίηση (το τετράγωνο με το βέλος) και μετά «Προσθήκη στην οθόνη Αφετηρίας»."; }
@@ -1061,7 +1176,10 @@ body.has-slip footer { padding-bottom: 90px; }
     time.append(el("b", null, fTime.format(m.kt)), lg);
     const teams = el("a", "ev-teams ev-link"); teams.href = "#m/" + encodeURIComponent(m.id);
     teams.setAttribute("aria-label", `Σελίδα αγώνα ${m.home} – ${m.away}`);
-    [m.home, m.away].forEach(n => { const t = el("div", "tm"); t.append(mono(n, "sm"), el("span", null, n)); teams.append(t); });
+    [m.home, m.away].forEach(n => {
+      const t = el("div", "tm"), mk = el("span", "fv", "★"); mk.dataset.team = n; mk.hidden = !fav.has(n); mk.setAttribute("aria-label", "αγαπημένη ομάδα");
+      t.append(mono(n, "sm"), el("span", null, n), mk); teams.append(t);
+    });
     teams.append(pbar(m.r));
     if (m.sport === "basketball") {
       const sp = -m.r.mg;
@@ -1422,7 +1540,10 @@ body.has-slip footer { padding-bottom: 90px; }
     const det = m.sport === "football" ? detailFootball(m) : detailBasketball(m);
     det.style.background = "transparent"; det.style.borderTop = "0"; det.style.padding = "0";
     an.append(det); grid.append(an);
-    v.append(top, hero, why, grid);
+    const follow = el("div", "follow");
+    [m.home, m.away].forEach(n => { const b = el("button"); b.type = "button"; b.dataset.follow = n; b.addEventListener("click", () => fav.toggle(n)); follow.append(b); });
+    v.append(top, hero, follow, why, grid);
+    fav.refresh();
     document.title = `${m.home} – ${m.away}: πρόγνωση | SamurAI bet`;
     window.scrollTo(0, 0);
   }
@@ -1674,6 +1795,7 @@ body.has-slip footer { padding-bottom: 90px; }
   if (elo) initTennis();
   renderRecord();
   slip.render();
+  renderMyTeams();
   setupInstall();
   const hash = (location.hash || "").slice(1), saved = store.get("pp-tab");
   showTab(TABS.includes(hash) ? hash : TABS.includes(saved) && !$("#tab-" + saved).hidden ? saved : "football");
